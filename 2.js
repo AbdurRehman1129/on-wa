@@ -29,9 +29,17 @@ Available Commands:
             let summary = 'Check Results:\n';
             for (const number of numbers) {
                 try {
-                    const isRegistered = await sock.queryExists(number + '@s.whatsapp.net');
-                    summary += `${number}: ${isRegistered ? 'Registered' : 'Not Registered'}\n`;
+                    const numberWithPrefix = number + '@s.whatsapp.net';
+                    console.log(`Checking registration for: ${numberWithPrefix}`);
+                    const isRegistered = await sock.queryExists(numberWithPrefix);
+
+                    if (isRegistered) {
+                        summary += `${number}: Registered\n`;
+                    } else {
+                        summary += `${number}: Not Registered\n`;
+                    }
                 } catch (error) {
+                    console.error(`Error checking registration for ${number}:`, error);
                     summary += `${number}: Error checking registration\n`;
                 }
             }
