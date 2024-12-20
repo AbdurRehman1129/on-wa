@@ -53,7 +53,10 @@ async function checkWhatsAppStatus(sock, sender, numbers) {
     let registeredCount = 0;
     let notRegisteredCount = 0;
 
-    for (const num of numbers) {
+    // Trim spaces around each number and split by commas
+    const cleanedNumbers = numbers.split(',').map(num => num.trim());
+
+    for (const num of cleanedNumbers) {
         try {
             const isRegistered = await sock.onWhatsApp(num + '@s.whatsapp.net');
             const statusMessage = isRegistered.length > 0
@@ -79,9 +82,3 @@ Not Registered: ${notRegisteredCount}`;
     // Send the result to the user
     await sock.sendMessage(sender, { text: resultSummary });
 }
-
-// Start the script
-(async () => {
-    console.log('Initializing WhatsApp connection...');
-    await connectWhatsApp();
-})();
