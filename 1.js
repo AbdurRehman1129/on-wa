@@ -1,52 +1,69 @@
-const { WAConnection, MessageType } = require('@adiwajshing/baileys');
+const { makeWASocket, useMultiFileAuthState, fetchLatestBaileysVersion, DisconnectReason } = require('@whiskeysockets/baileys');
 const fs = require('fs');
 const chalk = require('chalk');
 const figlet = require('figlet');
 
-// Clear the terminal screen
+// Clear the terminal screen (cross-platform compatibility)
 function clearScreen() {
     console.clear();
+    process.stdout.write('\x1Bc');
 }
 
 // Display banner
 function displayBanner() {
     const bannerText = figlet.textSync('DARK DEVIL', { font: 'small' });
     clearScreen();
-    console.log(chalk.cyan(bannerText));
-    console.log(chalk.green('Author/Github: @AbdurRehman1129'));
+    const terminalWidth = process.stdout.columns || 80;
+
+    const centeredBanner = bannerText.split('\n').map(line => line.padStart((terminalWidth + line.length) / 2).padEnd(terminalWidth)).join('\n');
+    console.log(chalk.cyan(centeredBanner));
+
+    const authorLine = chalk.green('Author/Github: @AbdurRehman1129');
+    console.log(authorLine.padStart((terminalWidth + authorLine.length) / 2).padEnd(terminalWidth));
 }
 
-// Initialize WhatsApp client
-const conn = new WAConnection();
+// Initialize WhatsApp client using baileys
+const store = {};
 const settingsFile = 'settings.json';
 let userPhoneNumber = '';
 
-// Load user's personal WhatsApp number (from saved file)
 if (fs.existsSync(settingsFile)) {
     const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
     userPhoneNumber = settings.phoneNumber || '';
 }
 
-// Authentication
-async function authenticate() {
-    conn.on('qr', (qr) => {
-        console.log('Scan this QR code to authenticate:');
-        console.log(qr);
-    });
+const { state, saveCreds } = await useMultiFileAuthState('auth');
+const { version } = await fetchLatestBaileysVersion();
+const sock = makeWASocket({
+    printQRInTerminal: true,
+    auth: state,
+    version: version,
+    getMessage: key => store[key.id]?.message
+});
 
-    conn.on('credentials-updated', () => {
-        const authInfo = conn.base64EncodedAuthInfo();
-        fs.writeFileSync('./auth_info.json', JSON.stringify(authInfo, null, '\t'));
-        console.log('Credentials updated!');
-    });
+sock.ev.process(async events => {
+    if (events['connection.update']) {
+        const { connection, lastDisconnect } = events['connection.update'];
+        if (connection === 'close') {
+            if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) {
+                connectWhatsApp();
+            } else {
+                console.log("Disconnected because you have logged out.");
+            }
+        }
+    }
+    if (events['creds.update']) {
+        await saveCreds();
+    }
+    if (events['messages.upsert']) {
+        const { messages } = events['messages.upsert'];
+        messages.forEach(message => {
+            console.log(message);
+        });
+    }
+});
 
-    await conn.connect();
-    console.log('Authenticated successfully!');
-    displayBanner();
-    displayMenu();
-}
-
-// Handle menu options
+// Function to handle WhatsApp menu
 function displayMenu() {
     clearScreen();
     displayBanner();
@@ -60,8 +77,8 @@ function displayMenu() {
 -----------------------------------------`;
 
     console.log(chalk.yellow(menu));
-    process.stdout.write('Enter your choice: ');
 
+    process.stdout.write('Enter your choice: ');
     process.stdin.resume();
     process.stdin.setEncoding('utf8');
     process.stdin.once('data', (choice) => {
@@ -92,13 +109,7 @@ function setPersonalNumber() {
         userPhoneNumber = number.trim();
         fs.writeFileSync(settingsFile, JSON.stringify({ phoneNumber: userPhoneNumber }), 'utf-8');
         console.log(chalk.green('Your personal WhatsApp number has been saved.'));
-
-        process.stdout.write('Enter anything to return to the main menu: ');
-        process.stdin.once('data', () => {
-            clearScreen();
-            displayBanner();
-            displayMenu();
-        });
+        promptReturnToMenu();
     });
 }
 
@@ -119,7 +130,7 @@ async function checkWhatsAppStatus() {
 
             for (const num of numbers) {
                 try {
-                    const isRegistered = await conn.isRegisteredUser (num);
+                    const isRegistered = await sock.isRegisteredUser(num);
                     const statusMessage = isRegistered ? `${num} is registered on WhatsApp.` : `${num} is NOT registered on WhatsApp.`;
                     resultSummary += `${statusMessage}\n`;
 
@@ -142,10 +153,9 @@ Not Registered: ${notRegisteredCount}`;
             resultSummary += summary;
             console.log(chalk.yellow(resultSummary));
 
-            // Send the summary to the personal WhatsApp number, if set
             if (userPhoneNumber) {
                 try {
-                    await conn.sendMessage(userPhoneNumber + '@s.whatsapp.net', { text: resultSummary });
+                    await sock.sendMessage(userPhoneNumber + '@c.us', resultSummary);
                     console.log(chalk.green('Summary sent to your WhatsApp.'));
                 } catch (err) {
                     console.log(chalk.red('Failed to send summary to WhatsApp:', err));
@@ -154,24 +164,48 @@ Not Registered: ${notRegisteredCount}`;
                 console.log(chalk.red('Personal WhatsApp number is not set. Please set it in the menu.'));
             }
 
-            // Prompt to go back to the main menu
-            process.stdout.write('Enter "m" to return to the main menu: ');
-            process.stdin.once('data', (input) => {
-                input = input.trim().toLowerCase();
-                if (input === 'm') {
-                    clearScreen();
-                    displayBanner();
-                    displayMenu();
+            promptReturnToMenu();
+        }
+    });
+}
+
+// Helper function to prompt user to return to menu
+function promptReturnToMenu() {
+    process.stdout.write('Enter "m" to return to the main menu: ');
+    process.stdin.once('data', (input) => {
+        input = input.trim().toLowerCase();
+        if (input === 'm') {
+            displayMenu();
+        } else {
+            console.log(chalk.red('Invalid input, returning to the main menu.'));
+            displayMenu();
+        }
+    });
+}
+
+// Initializing connection to WhatsApp
+async function connectWhatsApp() {
+    sock.ev.process(async events => {
+        if (events['connection.update']) {
+            const { connection, lastDisconnect } = events['connection.update'];
+            if (connection === 'close') {
+                if (lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) {
+                    connectWhatsApp();
                 } else {
-                    console.log(chalk.red('Invalid input, returning to the main menu.'));
-                    clearScreen();
-                    displayBanner();
-                    displayMenu();
+                    console.log("Disconnected because you have logged out.");
                 }
+            }
+        }
+        if (events['creds.update']) {
+            await saveCreds();
+        }
+        if (events['messages.upsert']) {
+            const { messages } = events['messages.upsert'];
+            messages.forEach(message => {
+                console.log(message);
             });
         }
     });
 }
 
-// Start the authentication process
-authenticate();
+displayMenu();
