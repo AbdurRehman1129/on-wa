@@ -31,7 +31,7 @@ Available Commands:
                 try {
                     const numberWithPrefix = number + '@s.whatsapp.net';
                     console.log(`Checking registration for: ${numberWithPrefix}`);
-                    const isRegistered = await sock.queryExists(numberWithPrefix);
+                    const isRegistered = await sock.isOnWhatsApp(numberWithPrefix);
 
                     if (isRegistered) {
                         summary += `${number}: Registered\n`;
