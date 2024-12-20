@@ -98,7 +98,7 @@ function displayMenu(sock) {
                 await checkWhatsAppStatus(sock);
                 break;
             case '2':
-                await setPersonalNumber();
+                await setPersonalNumber(sock);
                 break;
             case '3':
                 console.log('Exiting...');
@@ -113,7 +113,7 @@ function displayMenu(sock) {
 }
 
 // Function to set or change personal number
-async function setPersonalNumber() {
+async function setPersonalNumber(sock) {
     process.stdout.write('Enter your personal WhatsApp number (with country code): ');
     process.stdin.once('data', (number) => {
         userPhoneNumber = number.trim();
