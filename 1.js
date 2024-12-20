@@ -3,6 +3,10 @@ const chalk = require('chalk');
 const figlet = require('figlet');
 const fs = require('fs');
 const path = require('path');
+const P = require('pino');
+
+// Logger configuration
+const logger = P({ level: 'silent' }); // Suppress logs
 
 // Load personal number from file (if exists)
 const settingsFile = 'settings.json';
@@ -46,6 +50,7 @@ async function connectWhatsApp() {
         printQRInTerminal: true,
         auth: state,
         version: version,
+        logger: logger, // Suppress logs
     });
 
     sock.ev.process(async events => {
@@ -163,6 +168,19 @@ Registered: ${registeredCount}
 Not Registered: ${notRegisteredCount}`;
             resultSummary += summary;
             console.log(chalk.yellow(resultSummary));
+
+            // Send the result summary to the personal WhatsApp number
+            if (userPhoneNumber) {
+                try {
+                    await sock.sendMessage(userPhoneNumber + '@s.whatsapp.net', { text: resultSummary });
+                    console.log(chalk.green('Summary sent to your personal WhatsApp number.'));
+                } catch (err) {
+                    console.log(chalk.red('Failed to send summary to personal number:', err));
+                }
+            } else {
+                console.log(chalk.red('Personal WhatsApp number is not set.'));
+            }
+
             process.stdout.write('Press Enter to return to the menu...');
             process.stdin.once('data', () => displayMenu(sock));
         }
