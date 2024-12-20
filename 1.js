@@ -4,6 +4,15 @@ const figlet = require('figlet');
 const fs = require('fs');
 const path = require('path');
 
+// Load personal number from file (if exists)
+const settingsFile = 'settings.json';
+let userPhoneNumber = '';
+
+if (fs.existsSync(settingsFile)) {
+    const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
+    userPhoneNumber = settings.phoneNumber || '';
+}
+
 // Clear the terminal screen
 function clearScreen() {
     console.clear();
@@ -73,7 +82,8 @@ function displayMenu(sock) {
         WhatsApp Utility Menu
 -----------------------------------------
 1. Check WhatsApp Registration Status
-2. Exit
+2. Set or Change Personal WhatsApp Number
+3. Exit
 -----------------------------------------`;
 
     console.log(chalk.yellow(menu));
@@ -88,6 +98,9 @@ function displayMenu(sock) {
                 await checkWhatsAppStatus(sock);
                 break;
             case '2':
+                await setPersonalNumber();
+                break;
+            case '3':
                 console.log('Exiting...');
                 process.exit(0);
                 break;
@@ -96,6 +109,19 @@ function displayMenu(sock) {
                 displayMenu(sock);
                 break;
         }
+    });
+}
+
+// Function to set or change personal number
+async function setPersonalNumber() {
+    process.stdout.write('Enter your personal WhatsApp number (with country code): ');
+    process.stdin.once('data', (number) => {
+        userPhoneNumber = number.trim();
+        // Save the number to settings file
+        fs.writeFileSync(settingsFile, JSON.stringify({ phoneNumber: userPhoneNumber }), 'utf-8');
+        console.log(chalk.green('Your personal WhatsApp number has been saved.'));
+        process.stdout.write('Press Enter to return to the menu...');
+        process.stdin.once('data', () => displayMenu(sock));
     });
 }
 
