@@ -9,7 +9,7 @@ function clearScreen() {
     console.clear();
 }
 
-// Display banner with proper font loading
+// Display banner
 function displayBanner() {
     const fontPath = path.resolve(__dirname, 'node_modules/figlet/fonts/small.flf');
     if (!fs.existsSync(fontPath)) {
@@ -29,7 +29,7 @@ function displayBanner() {
     console.log(authorLine.padStart((terminalWidth + authorLine.length) / 2).padEnd(terminalWidth));
 }
 
-// Initialize WhatsApp socket
+// Connect to WhatsApp
 async function connectWhatsApp() {
     const { state, saveCreds } = await useMultiFileAuthState('auth');
     const { version } = await fetchLatestBaileysVersion();
@@ -43,12 +43,15 @@ async function connectWhatsApp() {
         if (events['connection.update']) {
             const { connection, lastDisconnect } = events['connection.update'];
             if (connection === 'close') {
-                const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== makeWASocket.DisconnectReason.loggedOut;
+                const isLoggedOut = lastDisconnect?.error?.output?.statusCode === 401; // Handle logout explicitly
+                if (isLoggedOut) {
+                    console.log(chalk.red('Logged out. Please delete the auth folder and re-run the script.'));
+                    process.exit(1);
+                }
+                const shouldReconnect = !isLoggedOut;
                 if (shouldReconnect) {
                     console.log(chalk.yellow('Reconnecting...'));
                     await connectWhatsApp();
-                } else {
-                    console.log(chalk.red('Logged out. Please restart the script.'));
                 }
             } else if (connection === 'open') {
                 console.log(chalk.green('WhatsApp connected!'));
@@ -140,7 +143,7 @@ Not Registered: ${notRegisteredCount}`;
     });
 }
 
-// Start the application
+// Start the script
 (async () => {
     displayBanner();
     console.log(chalk.green('Initializing WhatsApp connection...'));
