@@ -7,7 +7,7 @@ const P = require('pino');
 const ytdl = require('ytdl-core');
 
 // Logger configuration
-const logger = P({ level: 'silent' });
+const logger = P({ level: 'silent' }); // Suppress logs
 
 // Clear the terminal screen
 function clearScreen() {
@@ -42,7 +42,7 @@ async function connectWhatsApp() {
         printQRInTerminal: true,
         auth: state,
         version: version,
-        logger: logger,
+        logger: logger, // Suppress logs
     });
 
     sock.ev.process(async events => {
@@ -54,11 +54,8 @@ async function connectWhatsApp() {
                     console.log(chalk.red('Logged out. Please delete the auth folder and re-run the script.'));
                     process.exit(1);
                 }
-                const shouldReconnect = !isLoggedOut;
-                if (shouldReconnect) {
-                    console.log(chalk.yellow('Reconnecting...'));
-                    await connectWhatsApp();
-                }
+                console.log(chalk.yellow('Reconnecting...'));
+                await connectWhatsApp();
             } else if (connection === 'open') {
                 console.log(chalk.green('WhatsApp connected!'));
             }
@@ -78,55 +75,90 @@ async function connectWhatsApp() {
 
             if (text.startsWith('.video')) {
                 const ytLink = text.replace('.video', '').trim();
-                if (ytdl.validateURL(ytLink)) {
-                    await askQuality(sock, sender, ytLink);
-                } else {
-                    await sock.sendMessage(sender, { text: 'Invalid YouTube link. Please try again.' });
+
+                // Validate YouTube URL
+                if (!ytdl.validateURL(ytLink)) {
+                    await sock.sendMessage(sender, {
+                        text: 'Invalid YouTube link. Please provide a valid YouTube video URL.'
+                    });
+                    return;
                 }
+
+                // Ask for quality selection
+                await askQuality(sock, sender, ytLink);
             }
         }
     });
 }
 
-// Function to ask quality and download video
+// Function to ask quality selection
 async function askQuality(sock, sender, ytLink) {
-    const info = await ytdl.getInfo(ytLink);
-    const formats = ytdl.filterFormats(info.formats, 'videoonly');
-    let qualityOptions = 'Select a quality:\n';
+    const qualities = [
+        { key: '1', quality: '144p' },
+        { key: '2', quality: '360p' },
+        { key: '3', quality: '480p' },
+        { key: '4', quality: '720p' },
+        { key: '5', quality: '1080p' },
+    ];
 
-    formats.forEach((format, index) => {
-        qualityOptions += `${index + 1}: ${format.qualityLabel}\n`;
-    });
+    const optionsText = qualities.map(q => `${q.key} for ${q.quality}`).join('\n');
+    const promptText = `Choose the quality for the video:\n${optionsText}`;
 
-    await sock.sendMessage(sender, { text: qualityOptions });
+    await sock.sendMessage(sender, { text: promptText });
 
-    // Listen for response to select quality
-    sock.ev.on('messages.upsert', async (m) => {
-        const response = m.messages[0];
-        if (response.key.remoteJid === sender) {
-            const choice = parseInt(response.message.conversation.trim(), 10) - 1;
-            if (choice >= 0 && choice < formats.length) {
-                await downloadAndSend(sock, sender, ytLink, formats[choice]);
-            } else {
-                await sock.sendMessage(sender, { text: 'Invalid choice. Please try again.' });
-            }
+    // Listen for the quality selection
+    sock.ev.once('messages.upsert', async (m) => {
+        const response = m.messages[0].message.conversation.trim();
+        const selectedQuality = qualities.find(q => q.key === response);
+
+        if (!selectedQuality) {
+            await sock.sendMessage(sender, { text: 'Invalid selection. Please try again.' });
+            return;
         }
+
+        // Proceed to download the video
+        await handleQualityChoice(sock, sender, ytLink, selectedQuality.quality);
     });
 }
 
-// Function to download and send video
-async function downloadAndSend(sock, sender, ytLink, format) {
-    const filePath = path.resolve(__dirname, 'downloaded_video.mp4');
-    const stream = ytdl(ytLink, { format });
+// Function to handle quality choice and download the video
+async function handleQualityChoice(sock, sender, ytLink, quality) {
+    try {
+        const videoInfo = await ytdl.getInfo(ytLink);
+        const format = ytdl.chooseFormat(videoInfo.formats, { quality });
 
-    // Save video
-    stream.pipe(fs.createWriteStream(filePath)).on('finish', async () => {
-        await sock.sendMessage(sender, { document: { url: filePath }, mimetype: 'video/mp4', fileName: 'video.mp4' });
-        fs.unlinkSync(filePath); // Clean up file after sending
-    }).on('error', async (err) => {
-        console.error('Download error:', err);
-        await sock.sendMessage(sender, { text: 'Failed to download video. Please try again later.' });
-    });
+        if (!format) {
+            await sock.sendMessage(sender, { text: `Video is not available in ${quality}.` });
+            return;
+        }
+
+        const filePath = `./videos/${videoInfo.videoDetails.title.replace(/[^a-zA-Z0-9]/g, '_')}.mp4`;
+
+        await new Promise((resolve, reject) => {
+            const videoStream = ytdl(ytLink, { format });
+            const writeStream = fs.createWriteStream(filePath);
+
+            videoStream.pipe(writeStream);
+            videoStream.on('end', resolve);
+            videoStream.on('error', reject);
+        });
+
+        // Send the video back to the user
+        await sock.sendMessage(sender, {
+            text: `Here is your video in ${quality}:`,
+        });
+        await sock.sendMessage(sender, {
+            document: { url: filePath },
+            mimetype: 'video/mp4',
+            fileName: `${videoInfo.videoDetails.title}.mp4`,
+        });
+
+        // Cleanup
+        fs.unlinkSync(filePath);
+    } catch (err) {
+        console.error(err);
+        await sock.sendMessage(sender, { text: `Error downloading the video: ${err.message}` });
+    }
 }
 
 // Start the script
