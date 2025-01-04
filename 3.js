@@ -7,16 +7,7 @@ const P = require('pino');
 const ytdl = require('ytdl-core');
 
 // Logger configuration
-const logger = P({ level: 'silent' }); // Suppress logs
-
-// Load personal number from file (if exists)
-const settingsFile = 'settings.json';
-let userPhoneNumber = '';
-
-if (fs.existsSync(settingsFile)) {
-    const settings = JSON.parse(fs.readFileSync(settingsFile, 'utf-8'));
-    userPhoneNumber = settings.phoneNumber || '';
-}
+const logger = P({ level: 'silent' });
 
 // Clear the terminal screen
 function clearScreen() {
@@ -51,14 +42,14 @@ async function connectWhatsApp() {
         printQRInTerminal: true,
         auth: state,
         version: version,
-        logger: logger, // Suppress logs
+        logger: logger,
     });
 
     sock.ev.process(async events => {
         if (events['connection.update']) {
             const { connection, lastDisconnect } = events['connection.update'];
             if (connection === 'close') {
-                const isLoggedOut = lastDisconnect?.error?.output?.statusCode === 401; // Handle logout explicitly
+                const isLoggedOut = lastDisconnect?.error?.output?.statusCode === 401;
                 if (isLoggedOut) {
                     console.log(chalk.red('Logged out. Please delete the auth folder and re-run the script.'));
                     process.exit(1);
@@ -85,119 +76,57 @@ async function connectWhatsApp() {
         if (message.message && message.message.conversation) {
             const text = message.message.conversation.trim();
 
-            console.log(`Received message: "${text}" from: ${sender}`);
-
-            if (text.startsWith('.check')) {
-                const phoneNumbers = text.replace('.check', '').trim();
-                await checkWhatsAppStatus(sock, sender, phoneNumbers);
-            } else if (text.startsWith('.video')) {
-                const videoURL = text.replace('.video', '').trim();
-                console.log(`.video command received with URL: ${videoURL}`);
-                await sendQualityOptions(sock, sender, videoURL);
-            } else if (/^\d+p$/.test(text)) {
-                console.log(`Quality choice received: ${text}`);
-                await handleQualityChoice(sock, sender, text);
-            } else {
-                console.log(`Unrecognized command: ${text}`);
+            if (text.startsWith('.video')) {
+                const ytLink = text.replace('.video', '').trim();
+                if (ytdl.validateURL(ytLink)) {
+                    await askQuality(sock, sender, ytLink);
+                } else {
+                    await sock.sendMessage(sender, { text: 'Invalid YouTube link. Please try again.' });
+                }
             }
         }
     });
 }
 
-// Function to check WhatsApp registration status
-async function checkWhatsAppStatus(sock, sender, numbers) {
-    let resultSummary = 'List of Numbers Checked:\n';
-    let registeredCount = 0;
-    let notRegisteredCount = 0;
+// Function to ask quality and download video
+async function askQuality(sock, sender, ytLink) {
+    const info = await ytdl.getInfo(ytLink);
+    const formats = ytdl.filterFormats(info.formats, 'videoonly');
+    let qualityOptions = 'Select a quality:\n';
 
-    const cleanedNumbers = numbers.split(',').map(num => num.trim());
+    formats.forEach((format, index) => {
+        qualityOptions += `${index + 1}: ${format.qualityLabel}\n`;
+    });
 
-    for (const num of cleanedNumbers) {
-        try {
-            const isRegistered = await sock.onWhatsApp(num + '@s.whatsapp.net');
-            const statusMessage = isRegistered.length > 0
-                ? `${num} is registered on WhatsApp.`
-                : `${num} is NOT registered on WhatsApp.`;
-            resultSummary += `${statusMessage}\n`;
-            if (isRegistered.length > 0) {
-                registeredCount++;
+    await sock.sendMessage(sender, { text: qualityOptions });
+
+    // Listen for response to select quality
+    sock.ev.on('messages.upsert', async (m) => {
+        const response = m.messages[0];
+        if (response.key.remoteJid === sender) {
+            const choice = parseInt(response.message.conversation.trim(), 10) - 1;
+            if (choice >= 0 && choice < formats.length) {
+                await downloadAndSend(sock, sender, ytLink, formats[choice]);
             } else {
-                notRegisteredCount++;
+                await sock.sendMessage(sender, { text: 'Invalid choice. Please try again.' });
             }
-        } catch (err) {
-            resultSummary += `Error checking ${num}: ${err}\n`;
         }
-    }
-
-    const summary = `
-Summary:
-Registered: ${registeredCount}
-Not Registered: ${notRegisteredCount}`;
-    resultSummary += summary;
-
-    await sock.sendMessage(sender, { text: resultSummary });
+    });
 }
 
-// Send available quality options to the user
-async function sendQualityOptions(sock, sender, videoURL) {
-    try {
-        console.log(`Validating YouTube URL: ${videoURL}`);
-        if (!ytdl.validateURL(videoURL)) {
-            console.log('Invalid YouTube URL.');
-            await sock.sendMessage(sender, { text: 'Invalid YouTube URL. Please try again.' });
-            return;
-        }
+// Function to download and send video
+async function downloadAndSend(sock, sender, ytLink, format) {
+    const filePath = path.resolve(__dirname, 'downloaded_video.mp4');
+    const stream = ytdl(ytLink, { format });
 
-        console.log('Fetching video info...');
-        const info = await ytdl.getInfo(videoURL);
-
-        const availableQualities = info.formats
-            .filter(f => f.qualityLabel && f.container === 'mp4')
-            .map(f => f.qualityLabel);
-
-        console.log(`Available qualities: ${availableQualities}`);
-
-        const message = `
-Available qualities for this video:
-${availableQualities.join('\n')}
-
-Reply with the desired quality (e.g., 360p).
-`;
-        await sock.sendMessage(sender, { text: message });
-        userPhoneNumber = videoURL; // Temporarily store video URL for the user
-    } catch (err) {
-        console.error('Error fetching video details:', err);
-        await sock.sendMessage(sender, { text: 'Failed to fetch video details. Try again later.' });
-    }
-}
-
-// Handle quality choice and download video
-async function handleQualityChoice(sock, sender, quality) {
-    try {
-        console.log(`Fetching video with quality: ${quality}`);
-        const videoURL = userPhoneNumber;
-
-        const videoStream = ytdl(videoURL, {
-            quality: quality.replace('p', ''), // Use the numerical part of the quality
-        });
-
-        const filePath = `./${Date.now()}.mp4`;
-        const writeStream = fs.createWriteStream(filePath);
-        videoStream.pipe(writeStream);
-
-        writeStream.on('finish', async () => {
-            console.log(`Video downloaded: ${filePath}`);
-            await sock.sendMessage(sender, {
-                document: { url: filePath },
-                mimetype: 'video/mp4',
-                fileName: 'video.mp4',
-            });
-            fs.unlinkSync(filePath); // Remove the file after sending
-        });
-    } catch (err) {
-        console.error('Error downloading video:', err);
-        await sock.sendMessage(sender, { text: 'Failed to download video. Try again later.' });
-    }
+    // Save video
+    stream.pipe(fs.createWriteStream(filePath)).on('finish', async () => {
+        await sock.sendMessage(sender, { document: { url: filePath }, mimetype: 'video/mp4', fileName: 'video.mp4' });
+        fs.unlinkSync(filePath); // Clean up file after sending
+    }).on('error', async (err) => {
+        console.error('Download error:', err);
+        await sock.sendMessage(sender, { text: 'Failed to download video. Please try again later.' });
+    });
 }
 
 // Start the script
