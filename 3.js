@@ -85,18 +85,20 @@ async function connectWhatsApp() {
         if (message.message && message.message.conversation) {
             const text = message.message.conversation.trim();
 
+            console.log(`Received message: "${text}" from: ${sender}`);
+
             if (text.startsWith('.check')) {
                 const phoneNumbers = text.replace('.check', '').trim();
                 await checkWhatsAppStatus(sock, sender, phoneNumbers);
-            } else if (text.startsWith('.video ')) {
+            } else if (text.startsWith('.video')) {
                 const videoURL = text.replace('.video', '').trim();
+                console.log(`.video command received with URL: ${videoURL}`);
                 await sendQualityOptions(sock, sender, videoURL);
             } else if (/^\d+p$/.test(text)) {
-                const quality = text;
-                const videoData = await handleQualityChoice(sender, quality);
-                if (videoData) {
-                    await sendVideo(sock, sender, videoData);
-                }
+                console.log(`Quality choice received: ${text}`);
+                await handleQualityChoice(sock, sender, text);
+            } else {
+                console.log(`Unrecognized command: ${text}`);
             }
         }
     });
@@ -108,7 +110,6 @@ async function checkWhatsAppStatus(sock, sender, numbers) {
     let registeredCount = 0;
     let notRegisteredCount = 0;
 
-    // Trim spaces around each number and split by commas
     const cleanedNumbers = numbers.split(',').map(num => num.trim());
 
     for (const num of cleanedNumbers) {
@@ -134,74 +135,68 @@ Registered: ${registeredCount}
 Not Registered: ${notRegisteredCount}`;
     resultSummary += summary;
 
-    // Send the result to the user
     await sock.sendMessage(sender, { text: resultSummary });
 }
 
-// Function to send quality options
+// Send available quality options to the user
 async function sendQualityOptions(sock, sender, videoURL) {
     try {
+        console.log(`Validating YouTube URL: ${videoURL}`);
         if (!ytdl.validateURL(videoURL)) {
+            console.log('Invalid YouTube URL.');
             await sock.sendMessage(sender, { text: 'Invalid YouTube URL. Please try again.' });
             return;
         }
 
+        console.log('Fetching video info...');
+        const info = await ytdl.getInfo(videoURL);
+
+        const availableQualities = info.formats
+            .filter(f => f.qualityLabel && f.container === 'mp4')
+            .map(f => f.qualityLabel);
+
+        console.log(`Available qualities: ${availableQualities}`);
+
         const message = `
-Please choose a quality:
-360p
-480p
-720p
-1080p
+Available qualities for this video:
+${availableQualities.join('\n')}
 
 Reply with the desired quality (e.g., 360p).
 `;
         await sock.sendMessage(sender, { text: message });
         userPhoneNumber = videoURL; // Temporarily store video URL for the user
     } catch (err) {
-        console.error(err);
+        console.error('Error fetching video details:', err);
         await sock.sendMessage(sender, { text: 'Failed to fetch video details. Try again later.' });
     }
 }
 
-// Function to handle quality choice
-async function handleQualityChoice(sender, quality) {
+// Handle quality choice and download video
+async function handleQualityChoice(sock, sender, quality) {
     try {
-        const videoURL = userPhoneNumber; // Retrieve stored video URL
-        const filePath = `./downloads/video_${Date.now()}_${quality}.mp4`;
+        console.log(`Fetching video with quality: ${quality}`);
+        const videoURL = userPhoneNumber;
 
-        // Ensure the downloads directory exists
-        if (!fs.existsSync('./downloads')) {
-            fs.mkdirSync('./downloads');
-        }
-
-        // Download video
-        await new Promise((resolve, reject) => {
-            ytdl(videoURL, { quality })
-                .pipe(fs.createWriteStream(filePath))
-                .on('finish', resolve)
-                .on('error', reject);
+        const videoStream = ytdl(videoURL, {
+            quality: quality.replace('p', ''), // Use the numerical part of the quality
         });
 
-        return { filePath, quality };
-    } catch (err) {
-        console.error(err);
-        return null;
-    }
-}
+        const filePath = `./${Date.now()}.mp4`;
+        const writeStream = fs.createWriteStream(filePath);
+        videoStream.pipe(writeStream);
 
-// Function to send video
-async function sendVideo(sock, sender, videoData) {
-    try {
-        const { filePath, quality } = videoData;
-        await sock.sendMessage(sender, {
-            document: { url: filePath },
-            fileName: `Video_${quality}.mp4`,
-            mimetype: 'video/mp4',
+        writeStream.on('finish', async () => {
+            console.log(`Video downloaded: ${filePath}`);
+            await sock.sendMessage(sender, {
+                document: { url: filePath },
+                mimetype: 'video/mp4',
+                fileName: 'video.mp4',
+            });
+            fs.unlinkSync(filePath); // Remove the file after sending
         });
-        console.log(`Video sent successfully to ${sender}.`);
     } catch (err) {
-        console.error('Error sending video:', err);
-        await sock.sendMessage(sender, { text: 'Failed to send the video. Try again later.' });
+        console.error('Error downloading video:', err);
+        await sock.sendMessage(sender, { text: 'Failed to download video. Try again later.' });
     }
 }
 
