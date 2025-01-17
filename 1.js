@@ -79,6 +79,7 @@ async function connectWhatsApp() {
 }
 
 // Display menu
+// Add to the displayMenu function
 function displayMenu(sock) {
     clearScreen();
     displayBanner();
@@ -89,6 +90,7 @@ function displayMenu(sock) {
 1. Check WhatsApp Registration Status
 2. Set or Change Personal WhatsApp Number
 3. Exit
+4. Check WhatsApp Registration (Comma-separated Numbers)
 -----------------------------------------`;
 
     console.log(chalk.yellow(menu));
@@ -109,6 +111,9 @@ function displayMenu(sock) {
                 console.log('Exiting...');
                 process.exit(0);
                 break;
+            case '4':
+                await checkBulkWhatsAppStatus(sock);
+                break;
             default:
                 console.log(chalk.red('Invalid choice, please select again.'));
                 displayMenu(sock);
@@ -116,6 +121,54 @@ function displayMenu(sock) {
         }
     });
 }
+
+// Add a new function to handle the bulk WhatsApp registration check
+async function checkBulkWhatsAppStatus(sock) {
+    process.stdout.write('Enter phone numbers (comma-separated, with country code): ');
+    process.stdin.once('data', async (input) => {
+        input = input.trim();
+        const numbers = input.split(',').map(num => num.trim());
+        let registeredNumbers = [];
+        let notRegisteredNumbers = [];
+
+        console.log(chalk.blue('Checking registration status...'));
+        for (const num of numbers) {
+            try {
+                const isRegistered = await sock.onWhatsApp(num);
+                if (isRegistered.length > 0) {
+                    registeredNumbers.push(num);
+                } else {
+                    notRegisteredNumbers.push(num);
+                }
+            } catch (err) {
+                console.log(chalk.red(`Error checking number ${num}:`, err));
+            }
+        }
+
+        console.log(chalk.green('Registered Numbers:'), registeredNumbers.join(',') || 'None');
+        console.log(chalk.red('Not Registered Numbers:'), notRegisteredNumbers.join(',') || 'None');
+
+        // Send the summary to the personal WhatsApp number if set
+        if (userPhoneNumber) {
+            const resultSummary = `
+Registered Numbers: ${registeredNumbers.join(',') || 'None'}
+Not Registered Numbers: ${notRegisteredNumbers.join(',') || 'None'}
+            `;
+            try {
+                await sock.sendMessage(userPhoneNumber + '@s.whatsapp.net', { text: resultSummary });
+                console.log(chalk.green('Summary sent to your personal WhatsApp number.'));
+            } catch (err) {
+                console.log(chalk.red('Failed to send summary to personal number:', err));
+            }
+        } else {
+            console.log(chalk.red('Personal WhatsApp number is not set.'));
+        }
+
+        process.stdout.write('Press Enter to return to the menu...');
+        process.stdin.once('data', () => displayMenu(sock));
+    });
+}
+
 
 // Function to set or change personal number
 async function setPersonalNumber(sock) {
