@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WhatsApp Number Checker</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      margin: 20px;
+      padding: 0;
+      background-color: #f4f4f9;
+    }
+    textarea, button {
+      width: 100%;
+      margin: 10px 0;
+    }
+    .result {
+      margin-top: 20px;
+      padding: 10px;
+      border: 1px solid #ddd;
+      background-color: #fff;
+    }
+  </style>
+</head>
+<body>
+  <h1>WhatsApp Number Checker</h1>
+  <textarea id="numbers" rows="5" placeholder="Enter numbers separated by commas"></textarea>
+  <button onclick="checkNumbers()">Check Numbers</button>
+  <div id="results">
+    <div class="result">
+      <h3>Registered Numbers</h3>
+      <ul id="registered"></ul>
+    </div>
+    <div class="result">
+      <h3>Not Registered Numbers</h3>
+      <ul id="notRegistered"></ul>
+    </div>
+  </div>
+
+  <script>
+    async function checkNumbers() {
+      const numbers = document.getElementById('numbers').value.split(',').map(n => n.trim());
+      const response = await fetch('http://3.106.229.168:3000/check', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numbers })
+      });
+      const { registered, notRegistered } = await response.json();
+      document.getElementById('registered').innerHTML = registered.map(n => `<li>${n}</li>`).join('');
+      document.getElementById('notRegistered').innerHTML = notRegistered.map(n => `<li>${n}</li>`).join('');
+    }
+  </script>
+</body>
+</html>
