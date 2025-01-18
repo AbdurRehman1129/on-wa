@@ -1,55 +1,120 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WhatsApp Number Checker</title>
-  <style>
-    body {
-      font-family: Arial, sans-serif;
-      margin: 20px;
-      padding: 0;
-      background-color: #f4f4f9;
-    }
-    textarea, button {
-      width: 100%;
-      margin: 10px 0;
-    }
-    .result {
-      margin-top: 20px;
-      padding: 10px;
-      border: 1px solid #ddd;
-      background-color: #fff;
-    }
-  </style>
-</head>
-<body>
-  <h1>WhatsApp Number Checker</h1>
-  <textarea id="numbers" rows="5" placeholder="Enter numbers separated by commas"></textarea>
-  <button onclick="checkNumbers()">Check Numbers</button>
-  <div id="results">
-    <div class="result">
-      <h3>Registered Numbers</h3>
-      <ul id="registered"></ul>
-    </div>
-    <div class="result">
-      <h3>Not Registered Numbers</h3>
-      <ul id="notRegistered"></ul>
-    </div>
-  </div>
 
-  <script>
-    async function checkNumbers() {
-      const numbers = document.getElementById('numbers').value.split(',').map(n => n.trim());
-      const response = await fetch('http://3.106.229.168:3000/check', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ numbers })
-      });
-      const { registered, notRegistered } = await response.json();
-      document.getElementById('registered').innerHTML = registered.map(n => `<li>${n}</li>`).join('');
-      document.getElementById('notRegistered').innerHTML = notRegistered.map(n => `<li>${n}</li>`).join('');
-    }
-  </script>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WhatsApp Number Checker</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .min-vh-50 {
+            min-height: 50vh;
+        }
+
+        .result-box {
+            background-color: #fff;
+            border: 1px solid #ddd;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+
+        .result-box h3 {
+            margin-bottom: 15px;
+        }
+
+        .copy-btn {
+            margin-top: 10px;
+        }
+
+        .textarea {
+            width: 100%;
+            height: 150px;
+        }
+
+        .count {
+            margin-top: 10px;
+            font-size: 16px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container mt-5">
+        <h1 class="text-center mb-4">WhatsApp Number Checker</h1>
+        <div class="row mb-3">
+            <div class="col-md">
+                <textarea id="numbers" class="form-control textarea" placeholder="Enter numbers separated by commas"></textarea>
+            </div>
+        </div>
+        <div class="row mb-3">
+            <div class="col-md-2 d-flex align-items-center">
+                <button onclick="checkNumbers()" class="btn btn-primary w-100">Check Numbers</button>
+            </div>
+        </div>
+
+        <!-- Display total number of entered numbers -->
+        <div id="totalCount" class="count text-center"></div>
+
+        <div id="results">
+            <div class="result-box">
+                <h3>Registered Numbers</h3>
+                <textarea id="registered" class="form-control textarea" readonly placeholder="Registered numbers will appear here"></textarea>
+                <button id="copyRegistered" class="btn btn-secondary copy-btn">Copy Registered</button>
+                <div id="registeredCount" class="count"></div>
+            </div>
+            <div class="result-box">
+                <h3>Not Registered Numbers</h3>
+                <textarea id="notRegistered" class="form-control textarea" readonly placeholder="Not registered numbers will appear here"></textarea>
+                <button id="copyNotRegistered" class="btn btn-secondary copy-btn">Copy Not Registered</button>
+                <div id="notRegisteredCount" class="count"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle with Popper -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        async function checkNumbers() {
+            const numbers = document.getElementById('numbers').value.split(',').map(n => n.trim());
+            
+            // Display total number of entered numbers
+            const totalCount = numbers.length;
+            document.getElementById('totalCount').textContent = `Total Numbers: ${totalCount}`;
+
+            const response = await fetch('http://3.106.229.168:3000/check', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ numbers })
+            });
+            const { registered, notRegistered } = await response.json();
+            
+            // Display registered and not registered numbers
+            document.getElementById('registered').value = registered.join('\n');
+            document.getElementById('notRegistered').value = notRegistered.join('\n');
+
+            // Display counts for registered and not registered numbers
+            document.getElementById('registeredCount').textContent = `Registered Numbers: ${registered.length}`;
+            document.getElementById('notRegisteredCount').textContent = `Not Registered Numbers: ${notRegistered.length}`;
+        }
+
+        document.getElementById('copyRegistered').addEventListener('click', function () {
+            const registeredText = document.getElementById('registered');
+            registeredText.select();
+            document.execCommand('copy');
+            alert('Registered numbers copied to clipboard.');
+        });
+
+        document.getElementById('copyNotRegistered').addEventListener('click', function () {
+            const notRegisteredText = document.getElementById('notRegistered');
+            notRegisteredText.select();
+            document.execCommand('copy');
+            alert('Not registered numbers copied to clipboard.');
+        });
+    </script>
 </body>
+
 </html>

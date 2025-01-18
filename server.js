@@ -5,7 +5,9 @@ const { useMultiFileAuthState, default: makeWASocket } = require('@whiskeysocket
 const path = require('path');
 
 const app = express();
-app.use(cors());  // Add this line to enable CORS
+app.use(cors({
+  origin: 'https://hassamhanif.github.io'
+}));
 app.use(bodyParser.json());
 
 // Ensure the auth directory exists
