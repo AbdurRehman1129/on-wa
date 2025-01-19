@@ -6,9 +6,12 @@ const path = require('path');
 
 const app = express();
 app.use(cors({
-  origin: 'https://hassamhanif.github.io'
-}));
-app.use(bodyParser.json());
+    origin: 'https://hassamhanif.github.io',  // Allow requests only from your GitHub Pages
+    methods: ['GET', 'POST', 'OPTIONS'],    // Allow GET, POST, and OPTIONS methods
+    allowedHeaders: ['Content-Type'],        // Allow Content-Type headers
+    credentials: true,                       // If you are using cookies or authentication
+  }));
+  
 
 // Ensure the auth directory exists
 const authDir = path.resolve('./auth');
