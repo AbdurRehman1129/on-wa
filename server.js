@@ -5,13 +5,19 @@ const { useMultiFileAuthState, default: makeWASocket } = require('@whiskeysocket
 const path = require('path');
 
 const app = express();
+
+// Configure CORS
 app.use(cors({
-    origin: 'https://hassamhanif.github.io',  // Allow requests only from your GitHub Pages
-    methods: ['GET', 'POST', 'OPTIONS'],    // Allow GET, POST, and OPTIONS methods
-    allowedHeaders: ['Content-Type'],        // Allow Content-Type headers
-    credentials: true,                       // If you are using cookies or authentication
-  }));
-  
+  origin: 'https://hassamhanif.github.io',  // Allow requests from your GitHub Pages frontend
+  methods: ['GET', 'POST', 'OPTIONS'],    // Allow GET, POST, and OPTIONS methods
+  allowedHeaders: ['Content-Type'],        // Allow Content-Type headers
+  credentials: true,                       // If you are using cookies or authentication
+}));
+
+// Handle preflight requests
+app.options('*', cors());  // Enable CORS for all OPTIONS requests globally
+
+app.use(bodyParser.json());
 
 // Ensure the auth directory exists
 const authDir = path.resolve('./auth');
