@@ -1,28 +1,28 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const cors = require('cors');  // Add this line
+const cors = require('cors');
 const { useMultiFileAuthState, default: makeWASocket } = require('@whiskeysockets/baileys');
 const path = require('path');
 
 const app = express();
 
-// Configure CORS
-app.use(cors({
-  origin: 'https://hassamhanif.github.io',  // Allow requests from your GitHub Pages frontend
-  methods: ['GET', 'POST', 'OPTIONS'],    // Allow GET, POST, and OPTIONS methods
-  allowedHeaders: ['Content-Type'],        // Allow Content-Type headers
-  credentials: true,                       // If you are using cookies or authentication
-}));
+// Add CORS Middleware
+app.use((req, res, next) => {
+    res.header('Access-Control-Allow-Origin', 'https://hassamhanif.github.io'); // Allow your frontend origin
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');          // Allow these methods
+    res.header('Access-Control-Allow-Headers', 'Content-Type');                // Allow this header
+    res.header('Access-Control-Allow-Credentials', 'true');                    // Allow credentials
+    if (req.method === 'OPTIONS') {
+        return res.status(204).end(); // Respond to OPTIONS preflight with no content
+    }
+    next();
+});
 
-// Handle preflight requests
-app.options('*', cors());  // Enable CORS for all OPTIONS requests globally
-
+app.use(cors({ origin: 'https://hassamhanif.github.io' })); // Add this if cors() wasn't already included
 app.use(bodyParser.json());
 
-// Ensure the auth directory exists
+// Your existing backend code continues here
 const authDir = path.resolve('./auth');
-
-// Load WhatsApp session
 const initializeAuthState = async () => {
     return await useMultiFileAuthState(authDir);
 };
@@ -32,22 +32,19 @@ const initializeAuthState = async () => {
 
     const sock = makeWASocket({
         auth: state,
-        printQRInTerminal: true, // Print the QR code in the terminal for WhatsApp login
+        printQRInTerminal: true,
     });
 
-    sock.ev.on('creds.update', saveCreds); // Save session credentials when updated
+    sock.ev.on('creds.update', saveCreds);
 
-    // Endpoint for checking numbers
     app.post('/check', async (req, res) => {
         const { numbers } = req.body;
-
         if (!numbers || !Array.isArray(numbers)) {
             return res.status(400).json({ error: 'Invalid input. Provide an array of phone numbers.' });
         }
 
         const registered = [];
         const notRegistered = [];
-
         for (const number of numbers) {
             try {
                 const result = await sock.onWhatsApp(`${number}@s.whatsapp.net`);
@@ -58,17 +55,15 @@ const initializeAuthState = async () => {
                 }
             } catch (error) {
                 console.error(`Error checking number ${number}:`, error);
-                notRegistered.push(number); // Treat as not registered in case of error
+                notRegistered.push(number);
             }
         }
 
         res.json({ registered, notRegistered });
     });
 
-    // Start the server
     const PORT = 3000;
     app.listen(PORT, () => {
-        console.log(`Server running on http://3.106.229.168:${PORT}`);
-        console.log('Make sure to scan the QR code if not logged in.');
+        console.log(`Server running on https://my-backend.zapto.org:${PORT}`);
     });
 })();
