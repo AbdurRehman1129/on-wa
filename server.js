@@ -1,18 +1,9 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const cors = require('cors');
 const { useMultiFileAuthState, default: makeWASocket } = require('@whiskeysockets/baileys');
 const path = require('path');
 
 const app = express();
-
-// CORS Middleware
-app.use(cors({
-    origin: 'https://hassamhanif.github.io', // Allow frontend URL
-    methods: ['GET', 'POST'],                // Allow these methods
-    allowedHeaders: ['Content-Type'],        // Allow this header
-    credentials: true                        // Allow credentials (cookies, etc.)
-}));
 
 // Body Parser Middleware
 app.use(bodyParser.json());
@@ -62,6 +53,6 @@ const initializeAuthState = async () => {
 
     const PORT = 3000;
     app.listen(PORT, () => {
-        console.log(`Server running on https://my-backend.zapto.org:${PORT}`);
+        console.log(`Server running on http://localhost:${PORT}`);
     });
 })();
