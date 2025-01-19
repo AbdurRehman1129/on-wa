@@ -8,20 +8,11 @@ const app = express();
 
 // CORS Middleware
 app.use(cors({
-    origin: 'https://hassamhanif.github.io', // Ensure this matches your frontend URL
-    methods: ['GET', 'POST', 'OPTIONS'],     // Allow these methods
-    allowedHeaders: ['Content-Type'],        // Allow these headers
+    origin: 'https://hassamhanif.github.io', // Allow frontend URL
+    methods: ['GET', 'POST'],                // Allow these methods
+    allowedHeaders: ['Content-Type'],        // Allow this header
     credentials: true                        // Allow credentials (cookies, etc.)
 }));
-
-// Handle Preflight (OPTIONS) Requests
-app.options('*', (req, res) => {
-    res.header('Access-Control-Allow-Origin', 'https://hassamhanif.github.io');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type');
-    res.header('Access-Control-Allow-Credentials', 'true');
-    res.status(204).end(); // Preflight request success
-});
 
 // Body Parser Middleware
 app.use(bodyParser.json());
