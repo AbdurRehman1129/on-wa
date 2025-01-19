@@ -6,27 +6,33 @@ const path = require('path');
 
 const app = express();
 
-// Use CORS Middleware for Full Coverage
+// CORS Middleware
 app.use(cors({
-    origin: 'https://hassamhanif.github.io', // Your frontend URL
-    methods: ['GET', 'POST', 'OPTIONS'],     // Allowed methods
-    allowedHeaders: ['Content-Type'],        // Allowed headers
-    credentials: true                        // Allow credentials
+    origin: 'https://hassamhanif.github.io', // Ensure this matches your frontend URL
+    methods: ['GET', 'POST', 'OPTIONS'],     // Allow these methods
+    allowedHeaders: ['Content-Type'],        // Allow these headers
+    credentials: true                        // Allow credentials (cookies, etc.)
 }));
 
-// Handle Preflight Requests
-app.options('*', cors());
+// Handle Preflight (OPTIONS) Requests
+app.options('*', (req, res) => {
+    res.header('Access-Control-Allow-Origin', 'https://hassamhanif.github.io');
+    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.header('Access-Control-Allow-Headers', 'Content-Type');
+    res.header('Access-Control-Allow-Credentials', 'true');
+    res.status(204).end(); // Preflight request success
+});
 
-// Parse JSON Body
+// Body Parser Middleware
 app.use(bodyParser.json());
 
-// Define Constants
+// Initialize WhatsApp Socket
 const authDir = path.resolve('./auth');
 const initializeAuthState = async () => {
     return await useMultiFileAuthState(authDir);
 };
 
-// Initialize WhatsApp Socket
+// Set up the WhatsApp socket
 (async () => {
     const { state, saveCreds } = await initializeAuthState();
 
@@ -37,7 +43,6 @@ const initializeAuthState = async () => {
 
     sock.ev.on('creds.update', saveCreds);
 
-    // Endpoint to Check WhatsApp Registration
     app.post('/check', async (req, res) => {
         const { numbers } = req.body;
 
@@ -64,9 +69,8 @@ const initializeAuthState = async () => {
         res.json({ registered, notRegistered });
     });
 
-    // Start the Server
     const PORT = 3000;
     app.listen(PORT, () => {
-        console.log(`Server running on http://my-backend.zapto.org:${PORT}`);
+        console.log(`Server running on https://my-backend.zapto.org:${PORT}`);
     });
 })();
