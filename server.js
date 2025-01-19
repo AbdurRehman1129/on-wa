@@ -6,27 +6,27 @@ const path = require('path');
 
 const app = express();
 
-// Add CORS Middleware
-app.use((req, res, next) => {
-    res.header('Access-Control-Allow-Origin', 'https://hassamhanif.github.io'); // Allow your frontend origin
-    res.header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');          // Allow these methods
-    res.header('Access-Control-Allow-Headers', 'Content-Type');                // Allow this header
-    res.header('Access-Control-Allow-Credentials', 'true');                    // Allow credentials
-    if (req.method === 'OPTIONS') {
-        return res.status(204).end(); // Respond to OPTIONS preflight with no content
-    }
-    next();
-});
+// Use CORS Middleware for Full Coverage
+app.use(cors({
+    origin: 'https://hassamhanif.github.io', // Your frontend URL
+    methods: ['GET', 'POST', 'OPTIONS'],     // Allowed methods
+    allowedHeaders: ['Content-Type'],        // Allowed headers
+    credentials: true                        // Allow credentials
+}));
 
-app.use(cors({ origin: 'https://hassamhanif.github.io' })); // Add this if cors() wasn't already included
+// Handle Preflight Requests
+app.options('*', cors());
+
+// Parse JSON Body
 app.use(bodyParser.json());
 
-// Your existing backend code continues here
+// Define Constants
 const authDir = path.resolve('./auth');
 const initializeAuthState = async () => {
     return await useMultiFileAuthState(authDir);
 };
 
+// Initialize WhatsApp Socket
 (async () => {
     const { state, saveCreds } = await initializeAuthState();
 
@@ -37,8 +37,10 @@ const initializeAuthState = async () => {
 
     sock.ev.on('creds.update', saveCreds);
 
+    // Endpoint to Check WhatsApp Registration
     app.post('/check', async (req, res) => {
         const { numbers } = req.body;
+
         if (!numbers || !Array.isArray(numbers)) {
             return res.status(400).json({ error: 'Invalid input. Provide an array of phone numbers.' });
         }
@@ -62,8 +64,9 @@ const initializeAuthState = async () => {
         res.json({ registered, notRegistered });
     });
 
+    // Start the Server
     const PORT = 3000;
     app.listen(PORT, () => {
-        console.log(`Server running on https://my-backend.zapto.org:${PORT}`);
+        console.log(`Server running on http://my-backend.zapto.org:${PORT}`);
     });
 })();
